@@ -1,10 +1,14 @@
-package com.ooad.ranewacapital.view;// com.ooad.ranewacapital.view.AccountView.java - Boundary class for account overview (pure JavaFX)
+package com.ooad.ranewacapital.view;
+
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import java.util.List;
 
@@ -13,17 +17,18 @@ public class AccountView {
     private TextField amountField;
     private ChoiceBox<String> actionChoiceBox;
     private Label balanceLabel;
-    private AccountViewListener listener; // Interface for delegation
+    private Label statusLabel;
+    private Label userInfoLabel;
+    private Label totalBalanceLabel;
+    private AccountViewListener listener;
 
     public interface AccountViewListener {
         void onAccountSelected(String accountNumber);
         void onDeposit(String accountNumber, double amount);
         void onWithdraw(String accountNumber, double amount);
         void onCalculateInterest(String accountNumber);
-    }
-
-    public AccountView() {
-        // No business logic
+        void onOpenNewAccount();
+        void onLogout();
     }
 
     public void setListener(AccountViewListener listener) {
@@ -31,72 +36,116 @@ public class AccountView {
     }
 
     public void show(Stage stage, List<String> accountSummaries) {
-        // Populate accounts list
+        // --- Top Bar ---
+        userInfoLabel = new Label("Logged in...");
+        userInfoLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #007BFF;");
+
+        Button logoutBtn = new Button("Logout");
+        logoutBtn.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-size: 11;");
+        logoutBtn.setOnAction(e -> {
+            if (listener != null) listener.onLogout();
+        });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox topBar = new HBox(10, userInfoLabel, spacer, logoutBtn);
+        topBar.setAlignment(Pos.CENTER_LEFT);
+
+        // --- Summary Section (UPDATED CURRENCY) ---
+        totalBalanceLabel = new Label("Total Balance: P0.00");
+        totalBalanceLabel.setStyle("-fx-font-size: 16; -fx-font-weight: bold; -fx-text-fill: #28A745;");
+
+        // --- Open Account Button ---
+        Button openAccountBtn = new Button("+ Open New Account");
+        openAccountBtn.setStyle("-fx-background-color: #007BFF; -fx-text-fill: white; -fx-font-weight: bold;");
+        openAccountBtn.setMaxWidth(Double.MAX_VALUE);
+        openAccountBtn.setOnAction(e -> {
+            if (listener != null) listener.onOpenNewAccount();
+        });
+
+        // --- Account List ---
         accountsListView = new ListView<>();
         accountsListView.setItems(FXCollections.observableArrayList(accountSummaries));
         accountsListView.getSelectionModel().selectedItemProperty().addListener((obs, old, newVal) -> {
             if (newVal != null && listener != null) {
-                // Extract account number from summary string (e.g., "ACC123: $1000.00")
                 String accountNumber = newVal.split(":")[0].trim();
                 listener.onAccountSelected(accountNumber);
             }
         });
 
-        // Action selection
+        // --- Action Section ---
         actionChoiceBox = new ChoiceBox<>(FXCollections.observableArrayList("Deposit", "Withdraw", "Calculate Interest"));
         actionChoiceBox.setValue("Deposit");
 
         amountField = new TextField();
-        amountField.setPromptText("Enter amount");
+        amountField.setPromptText("Amount");
 
-        Button actionButton = new Button("Perform Action");
+        Button actionButton = new Button("Execute");
         actionButton.setOnAction(e -> handleAction());
 
-        balanceLabel = new Label("Balance: $0.00");
+        HBox actionBox = new HBox(10, actionChoiceBox, amountField, actionButton);
+        actionBox.setAlignment(Pos.CENTER_LEFT);
 
-        // Layout
-        VBox root = new VBox(10);
-        root.setPadding(new Insets(10));
+        balanceLabel = new Label("Select an account...");
+        statusLabel = new Label("");
+        statusLabel.setWrapText(true);
 
+        // --- Main Layout ---
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(20));
         root.getChildren().addAll(
-                new Label("Select Account:"),
+                topBar,
+                totalBalanceLabel,
+                new Separator(),
+                openAccountBtn,
+                new Label("Your Accounts:"),
                 accountsListView,
                 balanceLabel,
-                new HBox(10, new Label("Action:"), actionChoiceBox, new Label("Amount:"), amountField, actionButton)
+                new Separator(),
+                actionBox,
+                statusLabel
         );
 
-        Scene scene = new Scene(root, 400, 300);
-        stage.setTitle("Banking System - Accounts");
+        Scene scene = new Scene(root, 480, 600);
+        stage.setTitle("Ranewa Capital - Dashboard");
         stage.setScene(scene);
         stage.show();
     }
 
     private void handleAction() {
-        String selectedAction = actionChoiceBox.getValue();
-        String accountNumber = accountsListView.getSelectionModel().getSelectedItem() != null ?
-                accountsListView.getSelectionModel().getSelectedItem().split(":")[0].trim() : null;
-        if (accountNumber == null) return;
-
-        try {
-            double amount = Double.parseDouble(amountField.getText().trim());
-            if (listener != null) {
-                switch (selectedAction) {
-                    case "Deposit" -> listener.onDeposit(accountNumber, amount);
-                    case "Withdraw" -> listener.onWithdraw(accountNumber, amount);
-                    case "Calculate Interest" -> listener.onCalculateInterest(accountNumber);
-                }
-            }
-        } catch (NumberFormatException ex) {
-            // UI-only error handling: Could show alert, but keeping simple
+        String selected = accountsListView.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showStatus("Select an account first.", true);
+            return;
         }
-        amountField.clear(); // UI reset
+        String accountNumber = selected.split(":")[0].trim();
+        try {
+            double amount = amountField.getText().isEmpty() ? 0 : Double.parseDouble(amountField.getText());
+            if (listener != null) {
+                String action = actionChoiceBox.getValue();
+                if ("Deposit".equals(action)) listener.onDeposit(accountNumber, amount);
+                else if ("Withdraw".equals(action)) listener.onWithdraw(accountNumber, amount);
+                else if ("Calculate Interest".equals(action)) listener.onCalculateInterest(accountNumber);
+            }
+            amountField.clear();
+        } catch (NumberFormatException e) {
+            showStatus("Invalid amount.", true);
+        }
     }
 
-    public void updateBalance(String balanceText) {
-        balanceLabel.setText("Balance: " + balanceText); // UI update only
+    public void updateBalance(String text) { balanceLabel.setText("Current Balance: " + text); }
+    public void updateAccountsList(List<String> list) { accountsListView.setItems(FXCollections.observableArrayList(list)); }
+    public void updateUserInfo(String name, String email) { userInfoLabel.setText(name + " (" + email + ")"); }
+
+    // UPDATED CURRENCY
+    public void updateTotalBalance(double total) {
+        totalBalanceLabel.setText("Total Balance: P" + String.format("%.2f", total));
     }
 
-    public void updateAccountsList(List<String> summaries) {
-        accountsListView.setItems(FXCollections.observableArrayList(summaries)); // UI update only
+    public void showStatus(String msg, boolean isError) {
+        statusLabel.setText(msg);
+        statusLabel.setStyle("-fx-text-fill: " + (isError ? "red;" : "green;"));
     }
+
+    public Stage getStage() { return (Stage) accountsListView.getScene().getWindow(); }
 }

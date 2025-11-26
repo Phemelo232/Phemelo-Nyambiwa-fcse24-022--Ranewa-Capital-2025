@@ -27,11 +27,7 @@ public class DatabaseTest {
             e.printStackTrace();
         } finally {
             if (dbManager != null) {
-                try {
-                    dbManager.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
+                dbManager.close();
             }
         }
     }

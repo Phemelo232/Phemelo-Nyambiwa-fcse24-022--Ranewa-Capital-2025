@@ -1,0 +1,72 @@
+/* styles.css - Modern banking theme */
+.root {
+    -fx-font-family: 'Segoe UI', sans-serif;
+    -fx-background-color: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+    -fx-padding: 20;
+}
+
+.label {
+    -fx-font-weight: bold;
+    -fx-text-fill: #495057;
+}
+
+.text-field, .password-field {
+    -fx-background-radius: 5;
+    -fx-border-radius: 5;
+    -fx-border-color: #ced4da;
+    -fx-border-width: 1;
+    -fx-padding: 8;
+    -fx-font-size: 14;
+}
+
+.text-field:focused, .password-field:focused {
+    -fx-border-color: #007BFF;
+    -fx-border-width: 2;
+}
+
+.button {
+    -fx-background-color: #007BFF;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 5;
+    -fx-padding: 10 20;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #0056b3;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 5, 0, 0, 2);
+}
+
+.button:default {
+    -fx-background-color: #28A745;
+}
+
+.error-label {
+    -fx-text-fill: #DC3545;
+    -fx-font-weight: bold;
+    -fx-padding: 5 0;
+}
+
+.list-view {
+    -fx-background-color: white;
+    -fx-border-color: #ced4da;
+    -fx-border-radius: 5;
+    -fx-padding: 5;
+}
+
+.choice-box, .list-cell {
+    -fx-font-size: 14;
+}
+
+.status-label {
+    -fx-padding: 10;
+    -fx-background-color: #D4EDDA;
+    -fx-border-radius: 3;
+    -fx-text-fill: #155724;
+}
+
+.error-status {
+    -fx-background-color: #F8D7DA;
+    -fx-text-fill: #721C24;
+}

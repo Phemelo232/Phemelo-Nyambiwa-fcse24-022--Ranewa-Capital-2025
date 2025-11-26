@@ -1,162 +1,99 @@
 package com.ooad.ranewacapital.dao;
 
-// AccountDAO.java (Partial CRUD; extend as needed)
 import com.ooad.ranewacapital.model.*;
-
 import java.sql.*;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
-public record AccountDAO(DatabaseManager dbManager) {
+public class AccountDAO {
+    private final Connection connection;
 
-    public AccountDAO(DatabaseManager dbManager, DatabaseManager dbManager1) {
-        this(dbManager1);
+    public AccountDAO(Connection connection) {
+        this.connection = connection;
     }
 
-    public int create(Account account, int customerId) throws SQLException {
-        String sql = "INSERT INTO Accounts (accountNumber, balance, branch, openDate, customerId, type, interestRate, initialDeposit, employerVerified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection conn = dbManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            pstmt.setString(1, account.getAccountNumber());
-            pstmt.setDouble(2, account.getBalance());
-            pstmt.setString(3, account.getBranch());
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-            pstmt.setString(4, sdf.format(account.getOpenDate()));
-            pstmt.setInt(5, customerId);
+    public void create(Account account, int customerId) throws SQLException {
+        // UPDATED: Using snake_case column names to match PostgreSQL
+        String sql = "INSERT INTO Accounts (account_number, balance, branch, type, interest_rate, initial_deposit, employer_verified, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-            switch (account) {
-                case SavingsAccount sa -> {
-                    pstmt.setString(6, "SAVINGS");
-                    pstmt.setDouble(7, sa.getInterestRate());
-                    pstmt.setDouble(8, 0.0);
-                    pstmt.setBoolean(9, false);
-                }
-                case InvestmentAccount ia -> {
-                    pstmt.setString(6, "INVESTMENT");
-                    pstmt.setDouble(7, ia.getInterestRate());
-                    pstmt.setDouble(8, ia.getInitialDeposit());
-                    pstmt.setBoolean(9, false);
-                }
-                case ChequeAccount ca -> {
-                    pstmt.setString(6, "CHEQUE");
-                    pstmt.setDouble(7, 0.0);
-                    pstmt.setDouble(8, 0.0);
-                    pstmt.setBoolean(9, ca.isEmployerVerified());
-                }
-                default -> throw new IllegalArgumentException("Unsupported account type");
-            }
+        try (PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, account.getAccountNumber());
+            ps.setDouble(2, account.getBalance());
+            ps.setString(3, account.getBranch());
 
-            int rows = pstmt.executeUpdate();
-            if (rows > 0) {
-                try (ResultSet rs = pstmt.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        int id = rs.getInt(1);
-                        account.setId(id); // Assume Account has setId(int id)
-                        return id;
-                    }
-                }
+            if (account instanceof SavingsAccount) {
+                ps.setString(4, "SAVINGS");
+                ps.setDouble(5, ((SavingsAccount) account).getInterestRate());
+                ps.setDouble(6, 0);
+                ps.setBoolean(7, false);
+            } else if (account instanceof InvestmentAccount) {
+                ps.setString(4, "INVESTMENT");
+                ps.setDouble(5, ((InvestmentAccount) account).getInterestRate());
+                ps.setDouble(6, ((InvestmentAccount) account).getInitialDeposit());
+                ps.setBoolean(7, false);
+            } else if (account instanceof ChequeAccount) {
+                ps.setString(4, "CHEQUE");
+                ps.setDouble(5, 0);
+                ps.setDouble(6, 0);
+                ps.setBoolean(7, ((ChequeAccount) account).isEmployerVerified());
             }
-            return -1;
+            ps.setInt(8, customerId);
+
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) account.setId(rs.getInt(1));
+            }
         }
     }
 
-    public Account read(int id) throws SQLException {
-        String sql = "SELECT * FROM Accounts WHERE id = ?";
-        try (Connection conn = dbManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, id);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    String type = rs.getString("type");
-                    Account account;
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                    Date openDate = null;
-                    try {
-                        openDate = sdf.parse(rs.getString("openDate"));
-                    } catch (Exception e) {
-                        // Handle parse error
-                    }
-                    switch (type) {
-                        case "SAVINGS" -> {
-                            account = new SavingsAccount(rs.getString("accountNumber"), rs.getString("branch"));
-                            ((SavingsAccount) account).setInterestRate(rs.getDouble("interestRate"));
-                        }
-                        case "INVESTMENT" -> {
-                            account = new InvestmentAccount(rs.getString("accountNumber"), rs.getString("branch"));
-                            ((InvestmentAccount) account).setInterestRate(rs.getDouble("interestRate"));
-                            ((InvestmentAccount) account).setInitialDeposit(rs.getDouble("initialDeposit"));
-                        }
-                        case "CHEQUE" -> {
-                            account = new ChequeAccount(rs.getString("accountNumber"), rs.getString("branch"), rs.getBoolean("employerVerified"));
-                        }
-                        default -> throw new SQLException("Unknown account type: " + type);
-                    }
-                    account.setId(rs.getInt("id"));
-                    account.setBalance(rs.getDouble("balance"));
-                    account.setOpenDate(openDate);
-                    return account;
-                }
+    public Account findByAccountNumber(String accNum) throws SQLException {
+        // UPDATED: WHERE account_number = ?
+        try (PreparedStatement ps = connection.prepareStatement("SELECT * FROM Accounts WHERE account_number = ?")) {
+            ps.setString(1, accNum);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? mapRow(rs) : null;
             }
-        } catch (Exception e) {
-            throw new SQLException("Error reading account", e);
         }
-        return null;
     }
 
     public void update(Account account) throws SQLException {
-        String sql = "UPDATE Accounts SET balance = ?, type = ?, interestRate = ?, initialDeposit = ?, employerVerified = ? WHERE id = ?";
-        try (Connection conn = dbManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setDouble(1, account.getBalance());
-            switch (account) {
-                case SavingsAccount sa -> {
-                    pstmt.setString(2, "SAVINGS");
-                    pstmt.setDouble(3, sa.getInterestRate());
-                    pstmt.setDouble(4, 0.0);
-                    pstmt.setBoolean(5, false);
-                }
-                case InvestmentAccount ia -> {
-                    pstmt.setString(2, "INVESTMENT");
-                    pstmt.setDouble(3, ia.getInterestRate());
-                    pstmt.setDouble(4, ia.getInitialDeposit());
-                    pstmt.setBoolean(5, false);
-                }
-                case ChequeAccount ca -> {
-                    pstmt.setString(2, "CHEQUE");
-                    pstmt.setDouble(3, 0.0);
-                    pstmt.setDouble(4, 0.0);
-                    pstmt.setBoolean(5, ca.isEmployerVerified());
-                }
-                default -> throw new IllegalArgumentException("Unsupported account type");
-            }
-            pstmt.setInt(6, account.getId());
-            pstmt.executeUpdate();
+        // UPDATED: SET balance = ... WHERE account_number = ...
+        try (PreparedStatement ps = connection.prepareStatement("UPDATE Accounts SET balance = ? WHERE account_number = ?")) {
+            ps.setDouble(1, account.getBalance());
+            ps.setString(2, account.getAccountNumber());
+            ps.executeUpdate();
         }
     }
 
-    public void delete(int id) throws SQLException {
-        String sql = "DELETE FROM Accounts WHERE id = ?";
-        try (Connection conn = dbManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, id);
-            pstmt.executeUpdate();
-        }
-    }
-
-    public List<Account> listByCustomer(int customerId) throws SQLException {
-        List<Account> accounts = new ArrayList<>();
-        String sql = "SELECT * FROM Accounts WHERE customerId = ?";
-        try (Connection conn = dbManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, customerId);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                while (rs.next()) {
-                    accounts.add(read(rs.getInt("id"))); // Reuse read method
-                }
+    public List<Account> listByCustomer(int custId) throws SQLException {
+        // UPDATED: WHERE customer_id = ?
+        List<Account> list = new ArrayList<>();
+        try (PreparedStatement ps = connection.prepareStatement("SELECT * FROM Accounts WHERE customer_id = ?")) {
+            ps.setInt(1, custId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
             }
         }
-        return accounts;
+        return list;
+    }
+
+    private Account mapRow(ResultSet rs) throws SQLException {
+        String type = rs.getString("type");
+        // UPDATED: reading snake_case columns
+        String accNum = rs.getString("account_number");
+        String branch = rs.getString("branch");
+        double balance = rs.getDouble("balance");
+        boolean verified = rs.getBoolean("employer_verified");
+
+        Account acc;
+        switch (type) {
+            case "SAVINGS" -> acc = new SavingsAccount(accNum, branch);
+            case "INVESTMENT" -> acc = new InvestmentAccount(accNum, branch);
+            case "CHEQUE" -> acc = new ChequeAccount(accNum, branch, verified);
+            default -> throw new SQLException("Unknown Type");
+        }
+        acc.setId(rs.getInt("id"));
+        acc.setBalance(balance);
+        return acc;
     }
 }
